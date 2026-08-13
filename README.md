@@ -9,6 +9,11 @@
 
 Unlike heavy multi-service queues that require external brokers like Redis or RabbitMQ, VeloxAPI uses your existing **PostgreSQL** database with row-level locking (`FOR UPDATE SKIP LOCKED`) and monotonic **UUIDv7** identifiers. It provides bulletproof persistence, zero data loss, schema isolation, automatic logging capture, and an out-of-the-box management dashboard.
 
+- **Database-Backed Queue**: Tasks are safely written to a PostgreSQL table and processed by background worker threads.
+- **Flask Integration**: Easily expose normal functions as asynchronous HTTP endpoints.
+- **Embedded Web Dashboard**: View and monitor task statistics, processing states, parameters, execution trace logs, and download zip files of execution archives.
+- **Clipboard Integration**: Fast copy buttons for parameters, results, and debug errors.
+
 ---
 
 ## ⚡ Highlights
