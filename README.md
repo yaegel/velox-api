@@ -327,7 +327,10 @@ velox_api.start_workers(num_threads=4)
 ```
 
 Ensure your PostgreSQL `max_connections` and Velox `max_conn` pool sizes are configured to handle the total number of processes:
-$$\text{Total Connections} = \text{WSGI Processes} \times \text{max\_conn}$$
+
+```text
+Total Connections = WSGI Processes × max_conn
+```
 
 ---
 
