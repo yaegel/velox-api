@@ -36,7 +36,7 @@ Unlike heavy multi-service queues that require external brokers like Redis or Ra
 Install VeloxAPI in your Python environment:
 
 ```bash
-pip install velox
+pip install velox-api
 ```
 
 Or install in editable mode during development:
