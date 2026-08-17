@@ -1,7 +1,6 @@
 import json
 import os
 import time
-import functools
 import threading
 import io
 import zipfile
@@ -634,6 +633,43 @@ class VeloxAPI:
         """
         self.pool.putconn(conn)
 
+    def enqueue(self, task_name, payload=None, priority=0):
+        """
+        Inserts a queued task row for a worker on any instance to claim.
+
+        Args:
+            task_name (str): Registered task name, matching the function's __name__.
+            payload (dict, optional): Keyword arguments to call the task with.
+            priority (int): Scheduling priority; higher is claimed sooner.
+
+        Returns:
+            dict: A receipt of the form {"task_id": str, "status": "queued"}.
+        """
+        serialized_payload = json.dumps(payload or {})
+        task_id = generate_task_id()
+
+        connection = self.get_conn()
+        try:
+            connection.autocommit = False
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    INSERT INTO {self.schema}.tasks (id, task_name, args, priority)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id;
+                    """,
+                    (task_id, task_name, serialized_payload, priority)
+                )
+                task_id = cursor.fetchone()[0]
+            connection.commit()
+            return {"task_id": task_id, "status": "queued"}
+        except Exception as db_err:
+            connection.rollback()
+            logger.error(f"VeloxAPI Queue Insertion Fail: {db_err}")
+            raise db_err
+        finally:
+            self.return_conn(connection)
+
     def async_task(self, priority=0, route=None, methods=['POST'], sync=False):
         """
         Decorator that registers a Python function as a queueable, monitorable task.
@@ -650,35 +686,7 @@ class VeloxAPI:
             task_name = func.__name__
             TASK_REGISTRY[task_name] = func
 
-            @functools.wraps(func)
-            def wrapper(**payload):
-                """Accepts keys as direct kwargs unpacking."""
-                serialized_payload = json.dumps(payload)
-                task_id = generate_task_id()
-                
-                connection = self.get_conn()
-                try:
-                    connection.autocommit = False
-                    with connection.cursor() as cursor:
-                        cursor.execute(
-                            f"""
-                            INSERT INTO {self.schema}.tasks (id, task_name, args, priority)
-                            VALUES (%s, %s, %s, %s)
-                            RETURNING id;
-                            """,
-                            (task_id, task_name, serialized_payload, priority)
-                        )
-                        task_id = cursor.fetchone()[0]
-                    connection.commit()
-                    return {"task_id": task_id, "status": "queued"}
-                except Exception as db_err:
-                    connection.rollback()
-                    logger.error(f"VeloxAPI Queue Insertion Fail: {db_err}")
-                    raise db_err
-                finally:
-                    self.return_conn(connection)
-            
-            def automatic_route_handler(*args, **kwargs):                
+            def automatic_route_handler(*args, **kwargs):
                 # Extract payload from JSON body first (if not GET)
                 payload = {}
                 if request.method != 'GET':
@@ -764,7 +772,7 @@ class VeloxAPI:
                         _thread_local.task_logs = []
                 else:
                     # Asynchronous execution path (default)
-                    receipt = wrapper(**payload)
+                    receipt = self.enqueue(task_name, payload, priority)
                     return jsonify({
                         "message": f"Task '{task_name}' successfully received and queued.",
                         "receipt": receipt
@@ -781,7 +789,7 @@ class VeloxAPI:
                 methods=methods
             )
 
-            return wrapper
+            return func
         return decorator
 
     def start_workers(self, num_threads=2):
