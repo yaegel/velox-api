@@ -217,12 +217,22 @@ curl -X POST "http://localhost:5000/tasks/api/generate-invoice?sync=true" \
 }
 ```
 
-#### 3. Programmatic Enqueueing from Python
-Decorated functions can be invoked directly anywhere in your Python codebase to enqueue a task into the database queue:
+#### 3. Direct Calls & Enqueueing from Python
+Decorated functions are returned unchanged, so calling one from Python runs it in-process and returns its value:
 
 ```python
-# Direct Python call queues the task and returns a receipt dictionary
-receipt = generate_invoice(user_id=101, amount=49.99, currency="USD")
+# Direct Python call executes the function and returns its result
+invoice = generate_invoice(user_id=101, amount=49.99, currency="USD")
+```
+
+To put the work on the queue instead, use `enqueue()`. It takes the task name, so you can queue work without importing the task itself:
+
+```python
+receipt = velox_api.enqueue(
+    "generate_invoice",
+    {"user_id": 101, "amount": 49.99, "currency": "USD"},
+    priority=10,
+)
 print(receipt)
 # Output: {'task_id': '018d9f4e-28b4-7b90-8ef5-08e5c1a7d65b', 'status': 'queued'}
 ```
